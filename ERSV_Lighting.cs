@@ -23,6 +23,7 @@ public class ERSV_Lighting : MonoBehaviour
     Vector3 _surfaceEast;
     Vector3 _surfaceNorth;
 
+    float _origShadowDistance = -1f;
     bool  _prevShadowEnabled = false;
     bool  _hasTarget         = false;
     Color _targetLight;
@@ -280,6 +281,7 @@ public class ERSV_Lighting : MonoBehaviour
                 if (mr != null) mr.shadowCastingMode = origMode;
 
         if (_shadowCaster != null) { Destroy(_shadowCaster.gameObject); _shadowCaster = null; }
+        if (_origShadowDistance >= 0f) { QualitySettings.shadowDistance = _origShadowDistance; _origShadowDistance = -1f; }
         _sunLight = null;
     }
 
@@ -295,6 +297,9 @@ public class ERSV_Lighting : MonoBehaviour
             l.shadows = LightShadows.None;
         }
 
+        _origShadowDistance = QualitySettings.shadowDistance;
+        QualitySettings.shadowDistance = ERSV_Config.shadowDistance;
+
         // Create a shadow-only directional light we fully control — copying SunLight's shadow
         // settings but leaving SunLight itself untouched as KSP intends.
         if (_shadowCaster != null) Destroy(_shadowCaster.gameObject);
@@ -305,8 +310,9 @@ public class ERSV_Lighting : MonoBehaviour
             _shadowCaster.intensity      = _sunLight.intensity * ERSV_Config.shadowIntensity;
             _shadowCaster.shadows        = _sunLight.shadows;
             _shadowCaster.shadowStrength = _sunLight.shadowStrength;
-            _shadowCaster.shadowBias     = _sunLight.shadowBias;
-            _shadowCaster.cullingMask    = -1; // all layers, so roof/walls block sunlight
+            _shadowCaster.shadowBias             = _sunLight.shadowBias;
+            _shadowCaster.shadowCustomResolution = ERSV_Config.shadowResolution;
+            _shadowCaster.cullingMask            = -1; // all layers, so roof/walls block sunlight
             if (ERSV_Config.debugLogging) Debug.Log($"[ERSV] Shadow caster created | intensity={_shadowCaster.intensity:F2} | strength={_shadowCaster.shadowStrength:F2} | bias={_shadowCaster.shadowBias:F3} | suppressed {_shadowLights.Count} other shadow lights");
         }
         else

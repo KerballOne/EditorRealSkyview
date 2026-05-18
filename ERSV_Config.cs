@@ -21,6 +21,8 @@ public class ERSV_Config : MonoBehaviour
     // Shadow caster
     public static float shadowIntensity      = 0.5f;
     public static float shadowAzimuthBias    = 0.0f;
+    public static float shadowDistance       = 2000.0f;
+    public static int   shadowResolution     = 4096;
     public static float sphAzimuthBias       = -60.0f;
     public static float vabRoofZenithCutoff  = 0.0f;
 
@@ -74,6 +76,8 @@ public class ERSV_Config : MonoBehaviour
         Load(node, "roadMax",                 ref roadMax);
         Load(node, "shadowIntensity",         ref shadowIntensity);
         Load(node, "shadowAzimuthBias",       ref shadowAzimuthBias);
+        Load(node, "shadowDistance",          ref shadowDistance);
+        Load(node, "shadowResolution",        ref shadowResolution);
         Load(node, "sphAzimuthBias",          ref sphAzimuthBias);
         Load(node, "vabRoofZenithCutoff",     ref vabRoofZenithCutoff);
         Load(node, "exteriorRangeThreshold",  ref exteriorRangeThreshold);
@@ -92,6 +96,12 @@ public class ERSV_Config : MonoBehaviour
     {
         if (node.HasValue(key) && float.TryParse(
             node.GetValue(key), NumberStyles.Float, CultureInfo.InvariantCulture, out float v))
+            field = v;
+    }
+
+    static void Load(ConfigNode node, string key, ref int field)
+    {
+        if (node.HasValue(key) && int.TryParse(node.GetValue(key), out int v))
             field = v;
     }
 
