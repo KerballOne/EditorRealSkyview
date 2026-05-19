@@ -16,6 +16,9 @@ public class ERSV_Lighting : MonoBehaviour
     List<(Light light, float origRange, float origIntensity)>   _spillLights;
     List<(Light light, LightShadows origShadows)>               _shadowLights;
     List<(MeshRenderer mr, ShadowCastingMode origMode)>         _buildingMeshes;
+    List<GameObject>                                             _interiorObjects;
+    List<(Material mat, Color origEmissive)>                    _interiorMaterials;
+    bool _interiorLightsOn = true;
     Light _sunLight;
     Light _shadowCaster;
 
@@ -68,6 +71,7 @@ public class ERSV_Lighting : MonoBehaviour
             IndexWindowMaterials();
             IndexBuildingLights();
             IndexBuildingMeshes();
+            IndexInteriorLights();
             if (s == null || (s.modEnabled && s.shadowsEnabled))  DisableShadows();
             if (s == null || (s.modEnabled && s.lightingEnabled)) CalculateTargets();
         }
@@ -165,6 +169,7 @@ public class ERSV_Lighting : MonoBehaviour
         IndexWindowMaterials();
         IndexBuildingLights();
         IndexBuildingMeshes();
+        IndexInteriorLights();
         if (s == null || (s.modEnabled && s.shadowsEnabled))  DisableShadows();
         _lastFacility = EditorDriver.editorFacility;
         if (s == null || (s.modEnabled && s.lightingEnabled)) CalculateTargets();
@@ -234,6 +239,68 @@ public class ERSV_Lighting : MonoBehaviour
         }
     }
 
+    void IndexInteriorLights()
+    {
+        _interiorObjects   = new List<GameObject>();
+        _interiorMaterials = new List<(Material, Color)>();
+        _interiorLightsOn  = true;
+        var seenMat = new HashSet<int>();
+
+        string[] buildingNames = EditorDriver.editorFacility == EditorFacility.SPH
+            ? new[] { "SPHlvl1", "SPHlvl2", "SPHmodern" }
+            : new[] { "VABlvl2", "VABlvl3", "VABmodern" };
+
+        GameObject building     = null;
+        string     buildingName = null;
+        foreach (string n in buildingNames)
+        {
+            building = GameObject.Find(n);
+            if (building != null) { buildingName = n; break; }
+        }
+
+        if (building == null)
+        {
+            if (ERSV_Config.debugLogging) Debug.Log("[ERSV] Interior lights: no building root found");
+            return;
+        }
+
+        // Named child objects to toggle — identified by Sigma-EditorView's Switch class.
+        string[] childNames;
+        switch (buildingName)
+        {
+            case "VABlvl2":   childNames = new[] { "SpotlightFlares" }; break;
+            case "VABlvl3":   childNames = new[] { "VAB_Interior_BakeLights", "FloosLights" }; break;
+            case "VABmodern": childNames = new[] { "model_vab_interior_floor_cover_v20", "model_vab_interior_lights_accent_v16", "lights_bottom1", "lights_floor1", "lights_top1" }; break;
+            case "SPHlvl1":   childNames = new[] { "Bakelights" }; break;
+            case "SPHmodern": childNames = new[] { "rearWindowLightSplashes", "Component_749_1", "Component_750_1" }; break;
+            default:          childNames = new string[0]; break;
+        }
+
+        Transform[] allChildren = building.GetComponentsInChildren<Transform>(true);
+        foreach (string cn in childNames)
+        {
+            foreach (Transform t in allChildren)
+            {
+                if (t.name == cn) { _interiorObjects.Add(t.gameObject); break; }
+            }
+        }
+
+        // All _EmissiveColor materials in the building hierarchy (KSP's own emissive property).
+        foreach (Renderer r in building.GetComponentsInChildren<Renderer>(true))
+        {
+            foreach (Material mat in r.sharedMaterials)
+            {
+                if (mat == null) continue;
+                if (!mat.HasProperty("_EmissiveColor")) continue;
+                if (!seenMat.Add(mat.GetInstanceID())) continue;
+                _interiorMaterials.Add((mat, mat.GetColor("_EmissiveColor")));
+            }
+        }
+
+        if (ERSV_Config.debugLogging)
+            Debug.Log($"[ERSV] Interior lights: {_interiorObjects.Count} light objects, {_interiorMaterials.Count} window materials in {buildingName}");
+    }
+
     void IndexBuildingLights()
     {
         _spillLights = new List<(Light, float, float)>();
@@ -279,6 +346,13 @@ public class ERSV_Lighting : MonoBehaviour
         if (_buildingMeshes != null)
             foreach (var (mr, origMode) in _buildingMeshes)
                 if (mr != null) mr.shadowCastingMode = origMode;
+
+        if (_interiorObjects != null)
+            foreach (GameObject go in _interiorObjects)
+                if (go != null) go.SetActive(true);
+        if (_interiorMaterials != null)
+            foreach (var (mat, origEmissive) in _interiorMaterials)
+                if (mat != null) mat.SetColor("_EmissiveColor", origEmissive);
 
         if (_shadowCaster != null) { Destroy(_shadowCaster.gameObject); _shadowCaster = null; }
         if (_origShadowDistance >= 0f) { QualitySettings.shadowDistance = _origShadowDistance; _origShadowDistance = -1f; }
@@ -346,8 +420,9 @@ public class ERSV_Lighting : MonoBehaviour
         // PositiveY carries the true atmospheric color. Per-channel clamping prevents the
         // sun disk from blowing out the average. Sqrt gamma lift spreads the dark range so
         // nighttime stars produce a visible tint rather than near-zero ambient.
-        Color raw = ClampedFaceAverage(CubemapFace.PositiveY);
-        Color env = new Color(Mathf.Sqrt(raw.r), Mathf.Sqrt(raw.g), Mathf.Sqrt(raw.b), 1f);
+        Color raw     = ClampedFaceAverage(CubemapFace.PositiveY);
+        Color skyFull = new Color(Mathf.Sqrt(raw.r), Mathf.Sqrt(raw.g), Mathf.Sqrt(raw.b), 1f);
+        Color env     = skyFull;
 
         // Desaturate toward luminance — prevents night-sky blue tint on interior surfaces.
         float envGray = env.r * 0.299f + env.g * 0.587f + env.b * 0.114f;
@@ -370,6 +445,32 @@ public class ERSV_Lighting : MonoBehaviour
         _targetGround  = Color.Lerp(new Color(env.r * ERSV_Config.groundMultiplier,  env.g * ERSV_Config.groundMultiplier,  env.b * ERSV_Config.groundMultiplier,  1f), _originalGround,  ambientT);
         _hasTarget = true;
         if (ERSV_Config.debugLogging) Debug.Log($"[ERSV] Ambient targets | rawLum={rawLum:F3} sceneScale={sceneScale:F3} ambientT={ambientT:F3} | sky={_targetSky} equator={_targetEquator} ground={_targetGround}");
+
+        // Interior building lights (objects): off during daytime, on at night.
+        // Window emissive materials: sky-tinted and scaled by scene brightness.
+        {
+            bool wantLightsOn = sceneScale < ERSV_Config.interiorLightThreshold;
+            if (wantLightsOn != _interiorLightsOn)
+            {
+                _interiorLightsOn = wantLightsOn;
+                if (_interiorObjects != null)
+                    foreach (GameObject go in _interiorObjects)
+                        if (go != null) go.SetActive(wantLightsOn);
+                if (ERSV_Config.debugLogging)
+                    Debug.Log($"[ERSV] Interior lights → {(wantLightsOn ? "ON" : "OFF")} (sceneScale={sceneScale:F3} threshold={ERSV_Config.interiorLightThreshold:F2})");
+            }
+
+            // Windows use the pre-desaturation sky color so the tint reads naturally.
+            if (_interiorMaterials != null)
+            {
+                float windowBrightness = Mathf.Lerp(ERSV_Config.windowNightEmissive, ERSV_Config.windowDayEmissive, sceneScale);
+                Color windowTarget = new Color(skyFull.r * windowBrightness, skyFull.g * windowBrightness, skyFull.b * windowBrightness, 1f);
+                foreach (var (mat, _) in _interiorMaterials)
+                    if (mat != null) mat.SetColor("_EmissiveColor", windowTarget);
+                if (ERSV_Config.debugLogging)
+                    Debug.Log($"[ERSV] Window emissive → {windowTarget} (brightness={windowBrightness:F3} sceneScale={sceneScale:F3})");
+            }
+        }
 
         float envLum = env.r * 0.299f + env.g * 0.587f + env.b * 0.114f;
         if (_roadMaterials != null)

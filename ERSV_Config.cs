@@ -27,6 +27,9 @@ public class ERSV_Config : MonoBehaviour
     public static float vabRoofZenithCutoff  = 0.0f;
 
     // Building lights
+    public static float interiorLightThreshold  = 0.42f;
+    public static float windowDayEmissive       = 2.00f;
+    public static float windowNightEmissive     = 0.05f;
     public static float exteriorRangeThreshold = 100.0f;
     public static float spillRangeFloor        = 0.05f;
     public static float exteriorBoostMax       = 3.00f;
@@ -80,6 +83,9 @@ public class ERSV_Config : MonoBehaviour
         Load(node, "shadowResolution",        ref shadowResolution);
         Load(node, "sphAzimuthBias",          ref sphAzimuthBias);
         Load(node, "vabRoofZenithCutoff",     ref vabRoofZenithCutoff);
+        Load(node, "interiorLightThreshold",  ref interiorLightThreshold);
+        Load(node, "windowDayEmissive",       ref windowDayEmissive);
+        Load(node, "windowNightEmissive",     ref windowNightEmissive);
         Load(node, "exteriorRangeThreshold",  ref exteriorRangeThreshold);
         Load(node, "spillRangeFloor",         ref spillRangeFloor);
         Load(node, "exteriorBoostMax",        ref exteriorBoostMax);
