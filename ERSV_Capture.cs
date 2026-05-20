@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 [KSPAddon(KSPAddon.Startup.SpaceCentre, false)]
 public class ERSV_Capture : MonoBehaviour
@@ -162,6 +163,29 @@ public class ERSV_Capture : MonoBehaviour
         foreach (var f in sceneFlares)
             f.brightness *= flareBoost;
 
+        // Post-processing mods (e.g. CinematicShaders GTAO) attach CommandBuffers to
+        // Camera 00 (Camera.main) that read the previous real frame's scene colour in
+        // composite mode.  When we call Camera 00.Render() with our off-screen RT those
+        // buffers fire and blit the player's Space Centre view onto every cubemap face.
+        // Strip Camera 00's buffers for the duration of the capture, then restore them.
+        // Camera 01 is left alone so Scatterer's atmosphere buffers keep working.
+        Camera cam00 = layers.FirstOrDefault(c => c.name == "Camera 00");
+        var saved00 = new Dictionary<CameraEvent, CommandBuffer[]>();
+        if (cam00 != null)
+        {
+            foreach (CameraEvent evt in (CameraEvent[])System.Enum.GetValues(typeof(CameraEvent)))
+            {
+                CommandBuffer[] bufs = cam00.GetCommandBuffers(evt);
+                if (bufs.Length > 0)
+                {
+                    saved00[evt] = bufs;
+                    cam00.RemoveCommandBuffers(evt);
+                }
+            }
+            if (ERSV_Config.debugLogging)
+                Debug.Log($"[ERSV] Stripped {saved00.Count} CommandBuffer event(s) from Camera 00 for capture");
+        }
+
         foreach (var (face, fwd, up) in faceDirections)
         {
             Quaternion rot = worldBase * Quaternion.LookRotation(fwd, up);
@@ -230,6 +254,10 @@ public class ERSV_Capture : MonoBehaviour
 
         rt.Release();
         Destroy(rt);
+
+        foreach (var kvp in saved00)
+            foreach (CommandBuffer buf in kvp.Value)
+                cam00.AddCommandBuffer(kvp.Key, buf);
 
         for (int i = 0; i < sceneFlares.Length; i++)
             sceneFlares[i].brightness = savedFlare[i];
