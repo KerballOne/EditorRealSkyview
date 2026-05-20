@@ -62,8 +62,27 @@ public class ERSV_Apply : MonoBehaviour
 
     Texture2D CubemapFaceToTexture2D(CubemapFace face)
     {
-        Texture2D tex = new Texture2D(ERSV_Store.cubemap.width, ERSV_Store.cubemap.height, TextureFormat.RGB24, false);
-        tex.SetPixels(ERSV_Store.cubemap.GetPixels(face));
+        int size = ERSV_Store.cubemap.width;
+        Color[] src = ERSV_Store.cubemap.GetPixels(face);
+        Color[] dst = (Color[])src.Clone();
+
+        // The outermost texel row/column of each 90° perspective capture can be dark
+        // because the atmosphere geometry doesn't fill the extreme frustum edge.
+        // Extend the valid inner content outward so UV=1.0 clamps to a correct colour.
+        int n = ERSV_Config.edgeFixPixels;
+        for (int d = 0; d < n && n < size / 2; d++)
+        {
+            for (int i = 0; i < size; i++)
+            {
+                dst[d * size + i]              = src[n * size + i];
+                dst[(size - 1 - d) * size + i] = src[(size - 1 - n) * size + i];
+                dst[i * size + d]              = src[i * size + n];
+                dst[i * size + (size - 1 - d)] = src[i * size + (size - 1 - n)];
+            }
+        }
+
+        Texture2D tex = new Texture2D(size, size, TextureFormat.RGB24, false);
+        tex.SetPixels(dst);
         // Clamp prevents bilinear filtering from wrapping to the opposite edge at face
         // boundaries, which reads the wrong colour and produces a visible seam at night.
         tex.wrapMode = TextureWrapMode.Clamp;

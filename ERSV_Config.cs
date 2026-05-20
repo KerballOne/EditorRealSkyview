@@ -36,14 +36,16 @@ public class ERSV_Config : MonoBehaviour
     public static float windowAlbedoMin        = 0.10f;
 
     // Capture
-    public static float captureAltitude           = 120.0f;
+    public static float captureAltitude           = 800.0f;
     public static float lensFlareMultiplier        = 10.0f;
     public static int   smoothEdgesIterations      = 32;
-    public static bool  stripCam00LocalScenery      = true;
+    public static int   edgeFixPixels              = 4;
+    public static bool  stripCam00LocalScenery     = true;
+    public static bool  stripFacilityRenderers     = false;
 
     // Debug
-    public static bool debugLogging          = true;
-    public static bool saveFaceImages        = true;
+    public static bool debugLogging          = false;
+    public static bool saveFaceImages        = false;
 
     public static string modRoot             = "";
 
@@ -95,7 +97,9 @@ public class ERSV_Config : MonoBehaviour
         Load(node, "captureAltitude",           ref captureAltitude);
         Load(node, "lensFlareMultiplier",       ref lensFlareMultiplier);
         Load(node, "stripCam00LocalScenery",    ref stripCam00LocalScenery);
+        Load(node, "stripFacilityRenderers",    ref stripFacilityRenderers);
         Load(node, "smoothEdgesIterations",     ref smoothEdgesIterations);
+        Load(node, "edgeFixPixels",             ref edgeFixPixels);
         Load(node, "debugLogging",            ref debugLogging);
         Load(node, "saveFaceImages",          ref saveFaceImages);
 

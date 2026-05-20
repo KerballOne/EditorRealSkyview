@@ -100,6 +100,19 @@ public class ERSV_Capture : MonoBehaviour
         RenderTexture rt = new RenderTexture(size, size, 24, RenderTextureFormat.ARGB32);
         rt.Create();
 
+        // Strip Camera 00's layer 15 before the warm-up so Scatterer primes in the
+        // same culling-mask state as the actual face capture.  If stripped after the
+        // warm-up, the changed camera state causes Scatterer to re-trigger its lazy
+        // attachment and the first captured face (PositiveX) comes out darker.
+        Camera cam00 = layers.FirstOrDefault(c => c.name == "Camera 00");
+        int saved00Mask = cam00 != null ? cam00.cullingMask : -1;
+        if (cam00 != null && ERSV_Config.stripCam00LocalScenery)
+        {
+            cam00.cullingMask &= ~(1 << 15);
+            if (ERSV_Config.debugLogging)
+                Debug.Log($"[ERSV] Camera 00 Local Scenery(15) stripped before warm-up: cullingMask={cam00.cullingMask} ({DecodeCullingMask(cam00.cullingMask)})");
+        }
+
         // Warm-up pass: Scatterer lazily attaches ScatteringCommandBuffer and
         // SkySphereLocalCommandBuffer to Camera 01 via the static Camera.onPreRender
         // event. AddComponent during that callback takes effect on the next Render()
@@ -175,7 +188,6 @@ public class ERSV_Capture : MonoBehaviour
         // buffers fire and blit the player's Space Centre view onto every cubemap face.
         // Strip Camera 00's buffers for the duration of the capture, then restore them.
         // Camera 01 is left alone so Scatterer's atmosphere buffers keep working.
-        Camera cam00 = layers.FirstOrDefault(c => c.name == "Camera 00");
         var saved00 = new Dictionary<CameraEvent, CommandBuffer[]>();
         if (cam00 != null)
         {
@@ -192,12 +204,31 @@ public class ERSV_Capture : MonoBehaviour
                 Debug.Log($"[ERSV] Stripped {saved00.Count} CommandBuffer event(s) from Camera 00 for capture");
         }
 
-        int saved00Mask = cam00 != null ? cam00.cullingMask : -1;
-        if (cam00 != null && ERSV_Config.stripCam00LocalScenery)
+        MeshRenderer[] facilityRenderers = null;
+        if (ERSV_Config.stripFacilityRenderers)
         {
-            cam00.cullingMask &= ~(1 << 15);
-            if (ERSV_Config.debugLogging)
-                Debug.Log($"[ERSV] Camera 00 Local Scenery(15) stripped: cullingMask={cam00.cullingMask} ({DecodeCullingMask(cam00.cullingMask)})");
+            try
+            {
+                var list = new List<MeshRenderer>();
+                string[] targets = { "VehicleAssemblyBuilding", "SpacePlaneHangar" };
+                foreach (var facility in PSystemSetup.Instance.SpaceCenterFacilities)
+                    foreach (string target in targets)
+                        if (facility.facilityName.Contains(target) && facility.facilityTransform != null)
+                            list.AddRange(facility.facilityTransform.GetComponentsInChildren<MeshRenderer>());
+                facilityRenderers = list.ToArray();
+                foreach (var r in facilityRenderers) if (r != null) r.enabled = false;
+                if (ERSV_Config.debugLogging)
+                {
+                    Debug.Log($"[ERSV] Disabled {facilityRenderers.Length} facility renderers for capture");
+                    foreach (var r in facilityRenderers)
+                        if (r != null) Debug.Log($"[ERSV]   renderer: {r.gameObject.name}");
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[ERSV] stripFacilityRenderers failed, skipping: {e.Message}");
+                facilityRenderers = null;
+            }
         }
 
         foreach (var (face, fwd, up) in faceDirections)
@@ -276,6 +307,9 @@ public class ERSV_Capture : MonoBehaviour
             foreach (CommandBuffer buf in kvp.Value)
                 cam00.AddCommandBuffer(kvp.Key, buf);
 
+        if (facilityRenderers != null)
+            foreach (var r in facilityRenderers) if (r != null) r.enabled = true;
+
         for (int i = 0; i < sceneFlares.Length; i++)
             sceneFlares[i].brightness = savedFlare[i];
 
@@ -321,8 +355,11 @@ public class ERSV_Capture : MonoBehaviour
             ? (vabPos - (Vector3)body.position).normalized
             : Vector3.up;
 
-        Vector3 worldForward = Vector3.ProjectOnPlane(Vector3.forward, worldUp).normalized;
-        if (worldForward.magnitude < 0.001f)
+        Vector3d bodyNorthD  = body?.bodyTransform != null
+            ? (Vector3d)(body.bodyTransform.rotation * Vector3d.up)
+            : Planetarium.up;
+        Vector3 worldForward = (Vector3)Vector3d.Cross(bodyNorthD, (Vector3d)worldUp).normalized;
+        if (worldForward.sqrMagnitude < 0.0001f)
             worldForward = Vector3.ProjectOnPlane(Vector3.right, worldUp).normalized;
 
         if (ERSV_Config.debugLogging) Debug.Log($"[ERSV] worldUp:{worldUp} worldForward:{worldForward}");
