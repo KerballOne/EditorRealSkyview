@@ -36,12 +36,14 @@ public class ERSV_Config : MonoBehaviour
     public static float windowAlbedoMin        = 0.10f;
 
     // Capture
-    public static float captureAltitude      = 420.0f;
-    public static float lensFlareMultiplier  = 10.0f;
+    public static float captureAltitude           = 120.0f;
+    public static float lensFlareMultiplier        = 10.0f;
+    public static int   smoothEdgesIterations      = 32;
+    public static bool  stripCam00LocalScenery      = true;
 
     // Debug
-    public static bool debugLogging          = false;
-    public static bool saveFaceImages        = false;
+    public static bool debugLogging          = true;
+    public static bool saveFaceImages        = true;
 
     public static string modRoot             = "";
 
@@ -90,8 +92,10 @@ public class ERSV_Config : MonoBehaviour
         Load(node, "spillRangeFloor",         ref spillRangeFloor);
         Load(node, "exteriorBoostMax",        ref exteriorBoostMax);
         Load(node, "windowAlbedoMin",         ref windowAlbedoMin);
-        Load(node, "captureAltitude",         ref captureAltitude);
-        Load(node, "lensFlareMultiplier",     ref lensFlareMultiplier);
+        Load(node, "captureAltitude",           ref captureAltitude);
+        Load(node, "lensFlareMultiplier",       ref lensFlareMultiplier);
+        Load(node, "stripCam00LocalScenery",    ref stripCam00LocalScenery);
+        Load(node, "smoothEdgesIterations",     ref smoothEdgesIterations);
         Load(node, "debugLogging",            ref debugLogging);
         Load(node, "saveFaceImages",          ref saveFaceImages);
 

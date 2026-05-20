@@ -28,6 +28,7 @@ public class ERSV_Capture : MonoBehaviour
         ERSV_Settings s = ERSV_Settings.Instance;
         if (s != null && !s.modEnabled) return;
 
+        ERSV_Config.Reload();
         if (ERSV_Config.debugLogging) Debug.Log("[ERSV] Capture entered");
 
         ERSV_CaptureResolution res = s != null ? s.captureResolution : ERSV_CaptureResolution.Half;
@@ -64,7 +65,12 @@ public class ERSV_Capture : MonoBehaviour
             Debug.LogError("[ERSV] No sky cameras found — aborting capture");
             return;
         }
-        if (ERSV_Config.debugLogging) Debug.Log("[ERSV] Capture layers: " + string.Join(", ", layers.Select(c => c.name)));
+        if (ERSV_Config.debugLogging)
+        {
+            Debug.Log("[ERSV] Capture layers: " + string.Join(", ", layers.Select(c => c.name)));
+            foreach (Camera layer in layers)
+                Debug.Log($"[ERSV]   {layer.name} cullingMask={layer.cullingMask} ({DecodeCullingMask(layer.cullingMask)})");
+        }
 
         // GalaxyCamera and Camera ScaledSpace render in their own coordinate spaces.
         // Moving them puts the camera outside the galaxy / atmosphere shell and the
@@ -186,6 +192,14 @@ public class ERSV_Capture : MonoBehaviour
                 Debug.Log($"[ERSV] Stripped {saved00.Count} CommandBuffer event(s) from Camera 00 for capture");
         }
 
+        int saved00Mask = cam00 != null ? cam00.cullingMask : -1;
+        if (cam00 != null && ERSV_Config.stripCam00LocalScenery)
+        {
+            cam00.cullingMask &= ~(1 << 15);
+            if (ERSV_Config.debugLogging)
+                Debug.Log($"[ERSV] Camera 00 Local Scenery(15) stripped: cullingMask={cam00.cullingMask} ({DecodeCullingMask(cam00.cullingMask)})");
+        }
+
         foreach (var (face, fwd, up) in faceDirections)
         {
             Quaternion rot = worldBase * Quaternion.LookRotation(fwd, up);
@@ -255,6 +269,9 @@ public class ERSV_Capture : MonoBehaviour
         rt.Release();
         Destroy(rt);
 
+        if (cam00 != null && ERSV_Config.stripCam00LocalScenery)
+            cam00.cullingMask = saved00Mask;
+
         foreach (var kvp in saved00)
             foreach (CommandBuffer buf in kvp.Value)
                 cam00.AddCommandBuffer(kvp.Key, buf);
@@ -263,7 +280,7 @@ public class ERSV_Capture : MonoBehaviour
             sceneFlares[i].brightness = savedFlare[i];
 
         cubemap.Apply();
-        cubemap.SmoothEdges(8);
+        cubemap.SmoothEdges(ERSV_Config.smoothEdgesIterations);
         DontDestroyOnLoad(cubemap);
         ERSV_Store.cubemap = cubemap;
 
@@ -279,6 +296,20 @@ public class ERSV_Capture : MonoBehaviour
                     System.IO.File.WriteAllBytes(path, data);
             });
         }
+    }
+
+    static string DecodeCullingMask(int mask)
+    {
+        if (mask == -1) return "Everything";
+        if (mask == 0)  return "Nothing";
+        var names = new List<string>();
+        for (int i = 0; i < 32; i++)
+            if ((mask & (1 << i)) != 0)
+            {
+                string n = LayerMask.LayerToName(i);
+                names.Add(string.IsNullOrEmpty(n) ? $"Layer{i}" : $"{n}({i})");
+            }
+        return string.Join(", ", names);
     }
 
     Quaternion GetWorldAlignedRotation(Vector3 vabPos)

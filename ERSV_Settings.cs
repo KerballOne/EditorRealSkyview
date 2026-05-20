@@ -27,18 +27,6 @@ public class ERSV_Settings : GameParameters.CustomParameterNode
         toolTip = "Cast sun-direction shadows in the VAB and SPH. Requires Enable Mod.")]
     public bool shadowsEnabled = true;
 
-    [GameParameters.CustomParameterUI("Reload Config File",
-        toolTip = "Check to reload EditorRealSkyview.cfg from disk. The checkbox will clear itself automatically.")]
-    public bool reloadConfig = false;
-
-    public override void OnSave(ConfigNode node)
-    {
-        bool shouldReload = reloadConfig;
-        reloadConfig = false;   // reset before base writes fields to node
-        base.OnSave(node);
-        if (shouldReload) ERSV_Config.Reload();
-    }
-
     public static ERSV_Settings Instance =>
         HighLogic.CurrentGame?.Parameters.CustomParams<ERSV_Settings>();
 }
